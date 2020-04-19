@@ -8,7 +8,8 @@ l = logging.getLogger(name=__name__)
 import claripy
 
 from ..storage.memory import SimMemory, DUMMY_SYMBOLIC_READ_VALUE
-from ..storage.paged_memory import SimPagedMemory
+# from ..storage.paged_memory import SimPagedMemory
+from ..storage.segmented_memory import SimSegmentedMemory
 from ..storage.memory_object import SimMemoryObject
 from ..sim_state_options import SimStateOptions
 from ..misc.ux import once
@@ -47,7 +48,12 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
 
         if check_permissions is None:
             check_permissions = self.category == 'mem'
-        self.mem = SimPagedMemory(
+        # self.mem = SimPagedMemory(
+        #     memory_backer=memory_backer,
+        #     permissions_backer=permissions_backer,
+        #     check_permissions=check_permissions
+        # ) if mem is None else mem
+        self.mem = SimSegmentedMemory(
             memory_backer=memory_backer,
             permissions_backer=permissions_backer,
             check_permissions=check_permissions
@@ -556,6 +562,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         return r
 
     def _load(self, dst, size, condition=None, fallback=None, inspect=True, events=True, ret_on_segv=False):
+        l.debug("Doing a load")
         if self.state.solver.symbolic(size):
             l.warning("Concretizing symbolic length. Much sad; think about implementing.")
 
@@ -611,6 +618,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
 
     def _find(self, start, what, max_search=None, max_symbolic_bytes=None, default=None, step=1,
               disable_actions=False, inspect=True, chunk_size=None):
+        l.debug("Doing a find")
         if max_search is None:
             max_search = DEFAULT_MAX_SEARCH
 

@@ -85,6 +85,7 @@ class SimEngineUnicorn(SuccessorsMixin):
 
 
     def process_successors(self, successors, **kwargs):
+        l.debug("{}.process_successors".format("SimEngineUnicorn"))
         state = self.state
         if not self.__check(**kwargs):
             return super().process_successors(successors, **kwargs)

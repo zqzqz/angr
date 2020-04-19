@@ -47,6 +47,7 @@ class HooksMixin(SuccessorsMixin, ProcedureMixin):
         return None
 
     def process_successors(self, successors, procedure=None, **kwargs):
+        l.debug("{}.process_successors".format("HooksMixin"))
         state = self.state
         if procedure is None:
             procedure = self._lookup_hook(state, procedure)

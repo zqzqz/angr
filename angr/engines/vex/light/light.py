@@ -398,6 +398,7 @@ class VEXMixin(SimEngineBase):
 
     def _analyze_vex_defaultexit(self, *a, **kw): return self. _handle_vex_expr(*a, **kw)
     def handle_vex_block(self, irsb: pyvex.IRSB):
+        l.debug("handling {}".format(irsb))
         self.irsb = irsb
         self.tmps = [None]*self.irsb.tyenv.types_used
 

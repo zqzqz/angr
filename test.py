@@ -4,7 +4,9 @@ import logging
 logging.getLogger('angr').setLevel('DEBUG')
 
 example = sys.argv[1]
-project = angr.Project("examples/{}/{}".format(example, example), auto_load_libs=False)
+points_to_preset = angr.misc.PluginPreset()
+points_to_preset.add_default_plugin("points_to", angr.analyses.PointsTo())
+project = angr.Project("examples/{}/{}".format(example, example), auto_load_libs=False, analyses_preset=points_to_preset)
 
 state = project.factory.entry_state()
 sm = project.factory.simulation_manager(state)

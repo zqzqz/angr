@@ -25,12 +25,14 @@ class SimStateStorageMixin(VEXMixin):
         return self.state.scratch.tmp_expr(tmp)
 
     def _perform_vex_expr_Load(self, addr, ty, endness, action=None, inspect=True, **kwargs):
+        l.debug("vec memory load")
         return self.state.memory.load(addr, self._ty_to_bytes(ty), endness=endness, action=action, inspect=inspect)
 
     def _perform_vex_stmt_Put(self, offset, data, action=None, inspect=True):
         self.state.registers.store(offset, data, action=action, inspect=inspect)
 
     def _perform_vex_stmt_Store(self, addr, data, endness, action=None, inspect=True, condition=None):
+        l.debug("vec memory store")
         self.state.memory.store(addr, data, endness=endness, action=action, inspect=inspect, condition=None)
 
     def _perform_vex_stmt_WrTmp(self, tmp, data, deps=None):
@@ -69,6 +71,7 @@ class HeavyVEXMixin(SuccessorsMixin, ClaripyDataMixin, SimStateStorageMixin, VEX
         num_inst=None,
         extra_stop_points=None,
         **kwargs):
+        l.debug("HeavyVEXMixin.process_successors start")
         if not pyvex.lifting.lifters[self.state.arch.name] or type(successors.addr) is not int:
             return super().process_successors(successors, extra_stop_points=extra_stop_points, num_inst=num_inst, size=size, insn_text=insn_text, insn_bytes=insn_bytes, **kwargs)
 
@@ -187,6 +190,7 @@ class HeavyVEXMixin(SuccessorsMixin, ClaripyDataMixin, SimStateStorageMixin, VEX
                 )
 
         successors.processed = True
+        l.debug("HeavyVEXMixin.process_successors end")
 
     #
     # behavior instrumenting the VEXMixin

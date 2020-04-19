@@ -58,6 +58,7 @@ class ProcedureEngine(ProcedureMixin, SuccessorsMixin):
     kwarg to be passed to process.
     """
     def process_successors(self, successors, procedure=None, **kwargs):
+        l.debug("{}.process_successors".format("ProcedureEngine"))
         if procedure is None:
             raise errors.SimEngineError("Must provide the procedure explicitly to use ProcedureEngine")
         self.process_procedure(self.state, successors, procedure, **kwargs)

@@ -6,6 +6,7 @@ l = logging.getLogger(name=__name__)
 
 class SimEngineFailure(SuccessorsMixin, ProcedureMixin):
     def process_successors(self, successors, **kwargs):
+        l.debug("{}.process_successors".format("SimEngineFailure"))
         state = self.state
         jumpkind = state.history.parent.jumpkind if state.history and state.history.parent else None
 

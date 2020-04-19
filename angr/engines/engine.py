@@ -109,6 +109,7 @@ class SuccessorsMixin(SimEngine):
         :param force_addr:  Force execution to pretend that we're working at this concrete address
         :returns:           A SimSuccessors object categorizing the execution's successor states
         """
+        l.debug("Engine.process start")
         inline = kwargs.pop('inline', False)
         force_addr = kwargs.pop('force_addr', None)
 
@@ -164,6 +165,7 @@ class SuccessorsMixin(SimEngine):
         for succ in self.successors.flat_successors:
             succ.history.recent_description = description
 
+        l.debug("Engine.process end")
         return self.successors
 
     def process_successors(self, successors, **kwargs):

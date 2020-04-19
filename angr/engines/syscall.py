@@ -12,6 +12,7 @@ class SimEngineSyscall(SuccessorsMixin, ProcedureMixin):
     handles it as a step.
     """
     def process_successors(self, successors, **kwargs):
+        l.debug("{}.process_successors".format("SimEngineSyscall"))
         state = self.state
         # we have at this point entered the next step so we need to check the previous jumpkind
         if not state.history or not state.history.parent or not state.history.parent.jumpkind or not state.history.parent.jumpkind.startswith('Ijk_Sys'):

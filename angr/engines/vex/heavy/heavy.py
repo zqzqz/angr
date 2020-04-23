@@ -10,6 +10,7 @@ from ....utils.constants import DEFAULT_STATEMENT
 from .... import sim_options as o
 from .... import errors
 from . import dirty
+from .... import global_apis
 
 l = logging.getLogger(__name__)
 
@@ -25,14 +26,14 @@ class SimStateStorageMixin(VEXMixin):
         return self.state.scratch.tmp_expr(tmp)
 
     def _perform_vex_expr_Load(self, addr, ty, endness, action=None, inspect=True, **kwargs):
-        l.debug("vec memory load")
+        l.debug("vex memory load")
         return self.state.memory.load(addr, self._ty_to_bytes(ty), endness=endness, action=action, inspect=inspect)
 
     def _perform_vex_stmt_Put(self, offset, data, action=None, inspect=True):
         self.state.registers.store(offset, data, action=action, inspect=inspect)
 
     def _perform_vex_stmt_Store(self, addr, data, endness, action=None, inspect=True, condition=None):
-        l.debug("vec memory store")
+        l.debug("vex memory store")
         self.state.memory.store(addr, data, endness=endness, action=action, inspect=inspect, condition=None)
 
     def _perform_vex_stmt_WrTmp(self, tmp, data, deps=None):
@@ -92,6 +93,8 @@ class HeavyVEXMixin(SuccessorsMixin, ClaripyDataMixin, SimStateStorageMixin, VEX
         addr = successors.addr
         self.state.scratch.bbl_addr = addr
 
+        tmp_blocks = []
+
         while True:
             if irsb is None:
                 irsb = self.lift_vex(
@@ -133,6 +136,7 @@ class HeavyVEXMixin(SuccessorsMixin, ClaripyDataMixin, SimStateStorageMixin, VEX
             successors.artifacts['irsb_default_jumpkind'] = irsb.jumpkind
             successors.artifacts['insn_addrs'] = []
 
+            tmp_blocks.append(irsb)
 
             try:
                 self.handle_vex_block(irsb)
@@ -158,6 +162,8 @@ class HeavyVEXMixin(SuccessorsMixin, ClaripyDataMixin, SimStateStorageMixin, VEX
                 break
             else:
                 break
+
+        global_apis.VEX_IR.append(tmp_blocks)
 
         # do return emulation and calless stuff
         for exit_state in list(successors.all_successors):

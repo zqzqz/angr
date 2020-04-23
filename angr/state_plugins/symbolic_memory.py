@@ -8,8 +8,9 @@ l = logging.getLogger(name=__name__)
 import claripy
 
 from ..storage.memory import SimMemory, DUMMY_SYMBOLIC_READ_VALUE
-# from ..storage.paged_memory import SimPagedMemory
+from ..storage.paged_memory import SimPagedMemory
 from ..storage.segmented_memory import SimSegmentedMemory
+from ..storage.flat_memory import SimFlatMemory
 from ..storage.memory_object import SimMemoryObject
 from ..sim_state_options import SimStateOptions
 from ..misc.ux import once
@@ -53,7 +54,12 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         #     permissions_backer=permissions_backer,
         #     check_permissions=check_permissions
         # ) if mem is None else mem
-        self.mem = SimSegmentedMemory(
+        # self.mem = SimSegmentedMemory(
+        #     memory_backer=memory_backer,
+        #     permissions_backer=permissions_backer,
+        #     check_permissions=check_permissions
+        # ) if mem is None else mem
+        self.mem = SimFlatMemory(
             memory_backer=memory_backer,
             permissions_backer=permissions_backer,
             check_permissions=check_permissions
@@ -410,7 +416,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         if isinstance(addr, int):
             return [ addr ]
         elif not self.state.solver.symbolic(addr):
-            return [ self.state.solver.eval(addr) ]
+            tmp = [ self.state.solver.eval(addr) ]
 
         strategies = self.write_strategies if strategies is None else strategies
         return self._apply_concretization_strategies(addr, strategies, 'store')
@@ -780,6 +786,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         # First, resolve the addresses
         #
 
+
         try:
             req.actual_addresses = sorted(self.concretize_write_addr(req.addr))
         except SimMemoryError:
@@ -881,6 +888,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         return [ dict(value=conditional_value, addr=address, size=max_bytes) ]
 
     def _store_symbolic_addr(self, address,  addresses, size, data, endness, condition):
+        print(3)
         size = self.state.solver.eval(size)
         segments = self._get_segments(addresses, size)
 

@@ -205,7 +205,6 @@ class ForwardAnalysis:
 
         :return: None
         """
-
         self._pre_analysis()
 
         if self._graph_visitor is None:

@@ -265,38 +265,40 @@ class SimSolver(SimStatePlugin):
         if self._stored_solver is not None:
             return self._stored_solver
 
-        track = o.CONSTRAINT_TRACKING_IN_SOLVER in self.state.options
-        approximate_first = o.APPROXIMATE_FIRST in self.state.options
+        # track = o.CONSTRAINT_TRACKING_IN_SOLVER in self.state.options
+        # approximate_first = o.APPROXIMATE_FIRST in self.state.options
 
-        if o.STRINGS_ANALYSIS in self.state.options:
-            if 'smtlib_cvc4' in backend_manager.backends._backends_by_name:
-                our_backend = backend_manager.backends.smtlib_cvc4
-            elif 'smtlib_z3' in backend_manager.backends._backends_by_name:
-                our_backend = backend_manager.backends.smtlib_z3
-            elif 'smtlib_abc' in backend_manager.backends._backends_by_name:
-                our_backend = backend_manager.backends.smtlib_abc
-            else:
-                raise ValueError("Could not find suitable string solver!")
-            if o.COMPOSITE_SOLVER in self.state.options:
-                self._stored_solver = claripy.SolverComposite(
-                    template_solver_string=claripy.SolverCompositeChild(backend=our_backend, track=track)
-                )
-        elif o.ABSTRACT_SOLVER in self.state.options:
-            self._stored_solver = claripy.SolverVSA()
-        elif o.SYMBOLIC in self.state.options and o.REPLACEMENT_SOLVER in self.state.options:
-            self._stored_solver = claripy.SolverReplacement(auto_replace=False)
-        elif o.SYMBOLIC in self.state.options and o.CACHELESS_SOLVER in self.state.options:
-            self._stored_solver = claripy.SolverCacheless(track=track)
-        elif o.SYMBOLIC in self.state.options and o.COMPOSITE_SOLVER in self.state.options:
-            self._stored_solver = claripy.SolverComposite(track=track)
-        elif o.SYMBOLIC in self.state.options and any(opt in self.state.options for opt in o.approximation):
-            self._stored_solver = claripy.SolverHybrid(track=track, approximate_first=approximate_first)
-        elif o.HYBRID_SOLVER in self.state.options:
-            self._stored_solver = claripy.SolverHybrid(track=track, approximate_first=approximate_first)
-        elif o.SYMBOLIC in self.state.options:
-            self._stored_solver = claripy.Solver(track=track)
-        else:
-            self._stored_solver = claripy.SolverConcrete()
+        self._stored_solver = claripy.Solver()
+
+        # if o.STRINGS_ANALYSIS in self.state.options:
+        #     if 'smtlib_cvc4' in backend_manager.backends._backends_by_name:
+        #         our_backend = backend_manager.backends.smtlib_cvc4
+        #     elif 'smtlib_z3' in backend_manager.backends._backends_by_name:
+        #         our_backend = backend_manager.backends.smtlib_z3
+        #     elif 'smtlib_abc' in backend_manager.backends._backends_by_name:
+        #         our_backend = backend_manager.backends.smtlib_abc
+        #     else:
+        #         raise ValueError("Could not find suitable string solver!")
+        #     if o.COMPOSITE_SOLVER in self.state.options:
+        #         self._stored_solver = claripy.SolverComposite(
+        #             template_solver_string=claripy.SolverCompositeChild(backend=our_backend, track=track)
+        #         )
+        # elif o.ABSTRACT_SOLVER in self.state.options:
+        #     self._stored_solver = claripy.SolverVSA()
+        # elif o.SYMBOLIC in self.state.options and o.REPLACEMENT_SOLVER in self.state.options:
+        #     self._stored_solver = claripy.SolverReplacement(auto_replace=False)
+        # elif o.SYMBOLIC in self.state.options and o.CACHELESS_SOLVER in self.state.options:
+        #     self._stored_solver = claripy.SolverCacheless(track=track)
+        # elif o.SYMBOLIC in self.state.options and o.COMPOSITE_SOLVER in self.state.options:
+        #     self._stored_solver = claripy.SolverComposite(track=track)
+        # elif o.SYMBOLIC in self.state.options and any(opt in self.state.options for opt in o.approximation):
+        #     self._stored_solver = claripy.SolverHybrid(track=track, approximate_first=approximate_first)
+        # elif o.HYBRID_SOLVER in self.state.options:
+        #     self._stored_solver = claripy.SolverHybrid(track=track, approximate_first=approximate_first)
+        # elif o.SYMBOLIC in self.state.options:
+        #     self._stored_solver = claripy.Solver(track=track)
+        # else:
+        #     self._stored_solver = claripy.SolverConcrete()
 
         return self._stored_solver
 

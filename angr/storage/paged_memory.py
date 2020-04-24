@@ -1145,6 +1145,9 @@ class SimPagedMemory:
         self._initialized = set()
         return flushed
 
+    def get_memory_object(self, addr, size):
+        pass
+
 
 from .. import sim_options as o
 from ..state_plugins.inspect import BP_BEFORE, BP_AFTER

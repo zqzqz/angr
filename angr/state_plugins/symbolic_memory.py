@@ -14,6 +14,7 @@ from ..storage.flat_memory import SimFlatMemory
 from ..storage.memory_object import SimMemoryObject
 from ..sim_state_options import SimStateOptions
 from ..misc.ux import once
+from ..config import MEMORY_MODEL
 
 DEFAULT_MAX_SEARCH = 8
 
@@ -49,21 +50,28 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
 
         if check_permissions is None:
             check_permissions = self.category == 'mem'
-        # self.mem = SimPagedMemory(
-        #     memory_backer=memory_backer,
-        #     permissions_backer=permissions_backer,
-        #     check_permissions=check_permissions
-        # ) if mem is None else mem
-        # self.mem = SimSegmentedMemory(
-        #     memory_backer=memory_backer,
-        #     permissions_backer=permissions_backer,
-        #     check_permissions=check_permissions
-        # ) if mem is None else mem
-        self.mem = SimFlatMemory(
-            memory_backer=memory_backer,
-            permissions_backer=permissions_backer,
-            check_permissions=check_permissions
-        ) if mem is None else mem
+        
+        if mem is None:
+            if MEMORY_MODEL == "flat":
+                self.mem = SimFlatMemory(
+                    memory_backer=memory_backer,
+                    permissions_backer=permissions_backer,
+                    check_permissions=check_permissions
+                )
+            elif MEMORY_MODEL == "segmented":
+                self.mem = SimSegmentedMemory(
+                    memory_backer=memory_backer,
+                    permissions_backer=permissions_backer,
+                    check_permissions=check_permissions
+                )
+            else:
+                self.mem = SimPagedMemory(
+                    memory_backer=memory_backer,
+                    permissions_backer=permissions_backer,
+                    check_permissions=check_permissions
+                )
+        else:
+            self.mem = mem
 
         # set up the strategies
         self.read_strategies = read_strategies
@@ -584,6 +592,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         if self.state.solver.symbolic(dst) and options.AVOID_MULTIVALUED_READS in self.state.options:
             return [ ], self.get_unconstrained_bytes("symbolic_read_unconstrained", size*self.state.arch.byte_width), [ ]
 
+
         # get a concrete set of read addresses
         try:
             addrs = self.concretize_read_addr(dst)
@@ -594,6 +603,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
                 ), [ ]
             else:
                 raise
+    
 
         constraint_options = [ ]
 
@@ -606,7 +616,7 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
 
             for a in addrs:
                 read_value = self.state.solver.If(dst == a, self._read_from(a, size, inspect=inspect, events=events),
-                                              read_value)
+                                            read_value)
                 constraint_options.append(dst == a)
 
         if len(constraint_options) > 1:
@@ -620,7 +630,18 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
             read_value = self.state.solver.If(condition, read_value, fallback)
             load_constraint = [ self.state.solver.Or(self.state.solver.And(condition, *load_constraint), self.state.solver.Not(condition)) ]
 
-        return addrs, read_value, load_constraint
+        read_value1 = None
+        if MEMORY_MODEL != "paged":
+            try:
+                read_value1, load_constraint1 = self.mem.load_memory_object(dst, size)
+            except Exception as e:
+                l.error(e)
+
+        # print(read_value, read_value1)
+        if read_value1 is not None and self.state.solver.eval(read_value) == self.state.solver.eval(read_value1):
+            return addrs, read_value1, load_constraint1
+        else:
+            return addrs, read_value, load_constraint
 
     def _find(self, start, what, max_search=None, max_symbolic_bytes=None, default=None, step=1,
               disable_actions=False, inspect=True, chunk_size=None):

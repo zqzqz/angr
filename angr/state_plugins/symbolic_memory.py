@@ -14,7 +14,7 @@ from ..storage.flat_memory import SimFlatMemory
 from ..storage.memory_object import SimMemoryObject
 from ..sim_state_options import SimStateOptions
 from ..misc.ux import once
-from ..config import MEMORY_MODEL
+from .. import global_apis
 
 DEFAULT_MAX_SEARCH = 8
 
@@ -52,13 +52,13 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
             check_permissions = self.category == 'mem'
         
         if mem is None:
-            if MEMORY_MODEL == "flat":
+            if global_apis.MEMORY_MODEL == "flat":
                 self.mem = SimFlatMemory(
                     memory_backer=memory_backer,
                     permissions_backer=permissions_backer,
                     check_permissions=check_permissions
                 )
-            elif MEMORY_MODEL == "segmented":
+            elif global_apis.MEMORY_MODEL == "segmented":
                 self.mem = SimSegmentedMemory(
                     memory_backer=memory_backer,
                     permissions_backer=permissions_backer,
@@ -630,16 +630,23 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
             read_value = self.state.solver.If(condition, read_value, fallback)
             load_constraint = [ self.state.solver.Or(self.state.solver.And(condition, *load_constraint), self.state.solver.Not(condition)) ]
 
+        global_apis.LOAD_COUNT += 1
         read_value1 = None
-        if MEMORY_MODEL != "paged":
+        if global_apis.MEMORY_MODEL != "paged":
             try:
-                read_value1, load_constraint1 = self.mem.load_memory_object(dst, size)
+                addr = dst
+                # try concretization
+                if not (isinstance(addr, int) or self.state.solver.symbolic(addr)):
+                    addr = self.state.solver.eval(addr)
+                if not (isinstance(size, int) or self.state.solver.symbolic(size)):
+                    size = self.state.solver.eval(size)
+                read_value1 = self.mem.my_load_memory_object(addr, size)
             except Exception as e:
-                l.error(e)
+                l.error("my load memory object", e)
 
-        # print(read_value, read_value1)
         if read_value1 is not None and self.state.solver.eval(read_value) == self.state.solver.eval(read_value1):
-            return addrs, read_value1, load_constraint1
+            global_apis.CORRECT_LOAD_COUNT += 1
+            return addrs, read_value1, load_constraint
         else:
             return addrs, read_value, load_constraint
 
@@ -859,6 +866,20 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
                 req.stored_values.append(store_item['value'])
                 self._insert_memory_object(store_item['value'], store_item['addr'], store_item['size'])
 
+        global_apis.STORE_COUNT += 1
+        if global_apis.MEMORY_MODEL != "paged":
+            try:
+                addr = req.addr
+                size = req.size
+                # try concretization
+                if not (isinstance(addr, int) or self.state.solver.symbolic(addr)):
+                    addr = self.state.solver.eval(addr)
+                if not (isinstance(size, int) or self.state.solver.symbolic(size)):
+                    size = self.state.solver.eval(size)
+                self.mem.my_store_memory_object(req.data, addr, size)
+            except Exception as e:
+                l.error("my store memory object", e)
+
         l.debug("... done")
         req.completed = True
         return req
@@ -909,7 +930,6 @@ class SimSymbolicMemory(SimMemory): #pylint:disable=abstract-method
         return [ dict(value=conditional_value, addr=address, size=max_bytes) ]
 
     def _store_symbolic_addr(self, address,  addresses, size, data, endness, condition):
-        print(3)
         size = self.state.solver.eval(size)
         segments = self._get_segments(addresses, size)
 

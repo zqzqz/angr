@@ -4,7 +4,7 @@ from sortedcontainers import SortedDict
 from collections import ChainMap
 import logging
 import claripy
-import z3
+import copy
 
 
 from ..errors import SimMemoryError, SimSegfaultError, SimMemoryMissingError, SimConcreteMemoryError
@@ -17,35 +17,55 @@ from .paged_memory import SimPagedMemory
 l = logging.getLogger(name=__name__)
 
 class Segment:
-    def __init__(self, sim_mem_array=None, mem_array=None):
-        self._sim_mem_array = z3.Array('sim_mem_array', z3.IntSort(), z3.IntSort()) if sim_mem_array is None else sim_mem_array
-        self._mem_array = [] if mem_array is None else mem_array
+    def __init__(self, mem_array=None):
+        self._mem_array = {} if mem_array is None else mem_array
         self._addr = 0
         self._length = 0
 
-    def store_memory_object(self, mo):
-        self._addr = mo.base
-        self._length = mo.length
-        for i in range(mo.length):
-            b = mo.bytes_at(mo.base+i,1)
-            index = len(self._mem_array)
-            self._mem_array.append(b)
-            self._sim_mem_array = z3.Store(self._sim_mem_array, i, index)
+    def store_memory_object(self, data, addr, size, init=False):
+        if not isinstance(size, int):
+            return
 
-    def load_memory_object(self, addr, num_bytes):
-        if isinstance(addr, claripy.ast.bv.BV):
-            addr = self.state.solver.eval(addr)
-        if isinstance(addr, claripy.ast.bv.BV):
-            # no such interface
-            return claripy.ast.bv.BVV(0x00, num_bytes*8)
+        if init:
+            # assume allocation only has concrete address 
+            if not isinstance(addr, int):
+                return
+            self._addr = addr
+            self._length = size
+
+        byte_width = 8
+        for i in range(size):
+            if isinstance(data, bytes):
+                b = data[i*byte_width:(i+1)*byte_width]
+            else:
+                left = size * byte_width - i * byte_width - 1
+                right = left - byte_width + 1
+                b = data[left:right]
+            a = addr + i
+            if isinstance(a, int):
+                self._mem_array[a] = b
+            else:
+                for key in list(self._mem_array.keys()):
+                    if not claripy.is_false(a == key):
+                        self._mem_array[a] = claripy.If(a == key, b, self._mem_array[a])
+
+    def load_memory_object(self, addr, size):
+        if not isinstance(size, int):
+            return
+
         error = False
         result = claripy.BVV(0x00, 0)
-        for i in range(num_bytes):
-            index = z3.simplify(z3.Select(self._sim_mem_array, i))
-            if isinstance(index, z3.z3.IntNumRef):
-                result = result.concat(self._mem_array[int(index.as_string())])
+        for i in range(size):
+            a = addr + size - i - 1
+            b = claripy.BVV(0x00, 8)
+            if isinstance(a, int):
+                if a in self._mem_array:
+                    b = self._mem_array[a]
             else:
-                return claripy.ast.bv.BVV(0x00, num_bytes*8)
+                for key in list(self._mem_array.keys()):
+                    if not claripy.is_false(a == key):
+                        b = claripy.If(a == key, self._mem_array[a], b)
+            result = result.concat(b)
         return result
 
     
@@ -89,34 +109,36 @@ class SimSegmentedMemory(SimPagedMemory):
                            hash_mapping=new_hash_mapping,
                            symbolic_addrs=dict(self._symbolic_addrs),
                            check_permissions=self._check_perms,
-                           segments=self._segments)
+                           segments=copy.deepcopy(self._segments))
         m._preapproved_stack = self._preapproved_stack
         return m
 
 
-    def store_memory_object(self, mo, overwrite=True):
-        super(SimSegmentedMemory, self).store_memory_object(mo, overwrite)
-        seg = Segment()
-        seg.store_memory_object(mo)
-        self._segments.append(seg)
-
-    def load_memory_object(self, addr, num_bytes):
-        if isinstance(addr, claripy.ast.bv.BV):
-            addr = self.state.solver.eval(addr)
-        if isinstance(addr, claripy.ast.bv.BV):
-            # no such interface
-            return None, []
-        result = claripy.ast.bv.BVV(0x00, num_bytes * 8)
-        constraints = []
+    def my_store_memory_object(self, data, addr, size):
+        if not isinstance(size, int):
+            return
+        
+        found = False
         for seg in self._segments:
-            c = claripy.And(addr >= seg._addr, addr + num_bytes <= seg._addr + seg._length)
-            result = claripy.If(c, seg.load_memory_object(addr-seg._addr, num_bytes), result)
-            constraints.append(c)
-        if len(constraints) == 0:
-            constraint = []
-        else:
-            constraint = claripy.Or(*constraints)
-        l.warn("segmented memory load")
-        return result, [constraint]
+            if not claripy.is_false(claripy.And(addr >= seg._addr, addr + size <= seg._addr + seg._length)):
+                seg.store_memory_object(data, addr, size)
+                found = True
+        if not found:
+            seg = Segment()
+            seg.store_memory_object(data, addr, size, init=True)
+            self._segments.append(seg)
+        l.warn("segmented memory store")
+
+    def my_load_memory_object(self, addr, size):
+        if not isinstance(size, int):
+            return
+
+        result = claripy.ast.bv.BVV(0x00, size * 8)
+        for seg in self._segments:
+            c = claripy.And(addr >= seg._addr, addr + size <= seg._addr + seg._length)
+            if not claripy.is_false(c):
+                mo = seg.load_memory_object(addr, size)
+                result = claripy.If(c, mo, result)
+        return result
 
     

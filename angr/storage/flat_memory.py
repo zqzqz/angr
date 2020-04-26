@@ -4,7 +4,7 @@ from sortedcontainers import SortedDict
 from collections import ChainMap
 import logging
 import claripy
-import z3
+import copy
 
 l = logging.getLogger(name=__name__)
 
@@ -18,10 +18,9 @@ from .paged_memory import SimPagedMemory
 l = logging.getLogger(name=__name__)
 
 class SimFlatMemory(SimPagedMemory):
-    def __init__(self, sim_mem_array=None, mem_array=None, memory_backer=None, permissions_backer=None, pages=None, initialized=None, name_mapping=None, hash_mapping=None, page_size=None, symbolic_addrs=None, check_permissions=False):
+    def __init__(self, mem_array=None, memory_backer=None, permissions_backer=None, pages=None, initialized=None, name_mapping=None, hash_mapping=None, page_size=None, symbolic_addrs=None, check_permissions=False):
         super(SimFlatMemory, self).__init__(memory_backer, permissions_backer, pages, initialized, name_mapping, hash_mapping, page_size, symbolic_addrs, check_permissions)
-        self._sim_mem_array = z3.Array('sim_mem_array', z3.IntSort(), z3.IntSort()) if sim_mem_array is None else sim_mem_array
-        self._mem_array = [] if mem_array is None else mem_array
+        self._mem_array = {} if mem_array is None else mem_array
 
     # Override other APIs here!
     def __getstate__(self):
@@ -39,7 +38,6 @@ class SimFlatMemory(SimPagedMemory):
             '_symbolic_addrs': self._symbolic_addrs,
             '_preapproved_stack': self._preapproved_stack,
             '_check_perms': self._check_perms,
-            '_sim_mem_array': self._sim_mem_array,
             '_mem_array': self._mem_array
         }
 
@@ -58,39 +56,50 @@ class SimFlatMemory(SimPagedMemory):
                            hash_mapping=new_hash_mapping,
                            symbolic_addrs=dict(self._symbolic_addrs),
                            check_permissions=self._check_perms,
-                           sim_mem_array=self._sim_mem_array,
-                           mem_array=self._mem_array)
+                           mem_array=copy.deepcopy(self._mem_array))
         m._preapproved_stack = self._preapproved_stack
         return m
 
 
-    def store_memory_object(self, mo, overwrite=True):
-        super(SimFlatMemory, self).store_memory_object(mo, overwrite)
-        for i in range(mo.length):
-            b = mo.bytes_at(mo.base+i,1)
-            index = len(self._mem_array)
-            self._mem_array.append(b)
-            self._sim_mem_array = z3.Store(self._sim_mem_array, mo.base + i, index)
+    def my_store_memory_object(self, data, addr, size):
+        if not isinstance(size, int):
+            return
 
-    def load_memory_object(self, addr, num_bytes):
-        if isinstance(addr, claripy.ast.bv.BV):
-            addr = self.state.solver.eval(addr)
-        if isinstance(addr, claripy.ast.bv.BV):
-            # no such interface
-            return None, []
+        byte_width = 8
+        for i in range(size):
+            if isinstance(data, bytes):
+                b = data[i*byte_width:(i+1)*byte_width]
+            else:
+                left = size * byte_width - i * byte_width - 1
+                right = left - byte_width + 1
+                b = data[left:right]
+            a = addr + i
+            if isinstance(a, int):
+                self._mem_array[a] = b
+            else:
+                for key in list(self._mem_array.keys()):
+                    if not claripy.is_false(a == key):
+                        self._mem_array[a] = claripy.If(a == key, b, self._mem_array[a])
+        l.warn("falt memory store")
+
+    def my_load_memory_object(self, addr, size):
+        if not isinstance(size, int):
+            return
+
         error = False
         result = claripy.BVV(0x00, 0)
-        for i in range(num_bytes):
-            index = z3.simplify(z3.Select(self._sim_mem_array, addr+i))
-            if isinstance(index, z3.z3.IntNumRef):
-                result = result.concat(self._mem_array[int(index.as_string())])
+        for i in range(size):
+            a = addr + size - i - 1
+            b = claripy.BVV(0x00, 8)
+            if isinstance(a, int):
+                if a in self._mem_array:
+                    b = self._mem_array[a]
             else:
-                error = True
-                break
-        if error:
-            return None, None
-        else:
-            l.warn("falt memory load")
-            return result, []
+                for key in list(self._mem_array.keys()):
+                    if not claripy.is_false(a == key):
+                        b = claripy.If(a == key, self._mem_array[a], b)
+            result = result.concat(b)
+        l.warn("falt memory load")
+        return result
 
 
